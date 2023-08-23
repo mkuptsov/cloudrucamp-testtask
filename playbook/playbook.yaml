@@ -1,0 +1,47 @@
+---
+- name: creating user and setting up access
+  hosts: test-srv1
+  become: true
+
+  vars:
+    username: cloudru
+    password: cloudpass
+    public_key: ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCfrfE0OluoNHb5dOpV4RpWmVXvMBWc17kaM7DDjCm7romNQMDX95i5Fc67Q3c47pvrm/qi/ZqsCeqNdLl5+VV41rVz701Pj/UUr2FZpIm80Ur0iM1DFy81GKo/lS1INopqdd4KvUnM2d8yqfJSm9m5Cq7AM9S0mqObuMayfqNR4YcOlm9fnEMqhrSWbBVvdghPNiBzs7T9RzEq/0w8rs743tCF7MICv72fdgYadrGlxFsFWSujwZXQLI4VUSxKirJBCUgfR0u84gZK/wUzJ4EPqMichniTf24AsvidozUHWMDmQ+pUaBTyxjD5egi8LcV0EHH4feHwzacA2gyGbOtFK3wpa/dgE1yvPTkPKnccIXKnbel0mfxfsBVkclc5/DnczmrdaGrX5DCrQbI+HO4lhr4KzAm/pw6qfLcw8KjCdVKsnCRXykdat8KUwNAeolknRWdKDqdsbyXBj+ePMTlMR8YmoBj9znYWwOnAAyu56utiteL0oq9YPkb7ZGF5ZOE=
+
+  tasks:
+    - name: add user with password
+      ansible.builtin.user: 
+        name: "{{ username }}"
+        password: "{{ password | password_hash('sha512') }}"
+        state: present
+
+    - name: allow ssh authorization with key
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "{{ item.reg }}"
+        line: "{{ item.line }}"
+      with_items:
+        - { reg: '^#?PubkeyAuthentication', line: 'PubkeyAuthentication yes'}
+        - { reg: '^#?AuthorizedKeysFile', line: 'AuthorizedKeysFile     .ssh/authorized_keys'}
+      notify: sshd restart
+
+    - name: deny root login
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?PermitRootLogin'
+        line: 'PermitRootLogin no'
+        state: present
+        backup: true
+      notify: sshd restart
+
+    - name: copy public key
+      ansible.posix.authorized_key:
+        user: "{{ username }}"
+        key: "{{ public_key }}"
+        state: absent
+      
+  handlers:
+    - name: sshd restart
+      ansible.builtin.service:
+        name: sshd
+        state: restarted

@@ -1,0 +1,3 @@
+replicasCount: 3
+imageName: test-app:latest
+author: Maksim
